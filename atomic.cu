@@ -15,6 +15,15 @@ __global__ void parallel_for(int n, Func func) {
     }
 }
 
+template <class Func>
+__global__ void parallel_atomic_sum(int n, int *arr, int *sum, Func func) {
+    int localSum = 0;
+    for (int i = blockDim.x * blockIdx.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x) {
+        localSum += arr[i];
+    }
+    atomicAdd(sum, localSum);
+}
+
 struct MyFunctor {
     __device__ void operator() (int i) const {
         printf("number: %d\n", i);
@@ -66,10 +75,12 @@ int main() {
     if (test(arr, [](int i) {return 1;}, n)) printf("init success.\n");
     else printf("init failed.\n");
     TICK(atomic_op);
-    parallel_for<<<n / 512, 128>>> (n, [arr = arr.data(), sum = sum.data()] __device__ (int i) {
-        // sum[0] += arr[i]; FIXME: data race!
-        atomicAdd(sum, arr[i]);
-    });
+    // parallel_for<<<n / 512, 128>>> (n, [arr = arr.data(), sum = sum.data()] __device__ (int i) {
+    //     // sum[0] += arr[i]; FIXME: data race!
+    //     atomicAdd(sum, arr[i]);
+    // });
+    std::function<void(int)> nothing = [] (int i) {};
+    parallel_atomic_sum<<<n / 512, 128>>> (n, arr.data(), sum.data(), nothing);
     TOCK(atomic_op);
     checkCudaErrors(cudaDeviceSynchronize());
     // if(test(arr, sinf, n)) printf("cong.\n");
