@@ -10,8 +10,10 @@
 
 template<class T>
 __global__ void parallel_transpose(T *matrix, T *matrix_trans, const int nx, const int ny) {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-    int x = idx % nx, y = idx / nx;
+    // int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    // int x = idx % nx, y = idx / nx;
+    int x = blockDim.x * blockIdx.x + threadIdx.x;
+    int y = blockDim.y * blockIdx.y + threadIdx.y;
     if (x >= nx || y >= ny) return;
     matrix_trans[y * nx + x] = matrix[x * ny + y];
 }
@@ -47,7 +49,7 @@ void printMatrix(T *mat) {
 }
 
 int main() {
-    const int nx = 1 << 12, ny = 1 << 11;
+    const int nx = 1 << 14, ny = 1 << 14;
     int blockSize = 1024, gridSize = nx * ny / blockSize;
     std::vector<int, CudaAllocator<int>>matrix(nx * ny);
     std::vector<int, CudaAllocator<int>>matrix_trans(nx * ny);
@@ -57,7 +59,7 @@ int main() {
     // checkCudaErrors(cudaDeviceSynchronize());
     // printMatrix<nx, ny>(matrix.data());
     TICK(matrix_transpose);
-    parallel_transpose<<<gridSize, blockSize>>>(matrix.data(), matrix_trans.data(), nx, ny);
+    parallel_transpose<<<dim3(nx / 32, ny / 32, 1), dim3(32, 32, 1)>>>(matrix.data(), matrix_trans.data(), nx, ny);
     checkCudaErrors(cudaDeviceSynchronize());
     TOCK(matrix_transpose);
     // printMatrix<ny, nx>(matrix_trans.data());
