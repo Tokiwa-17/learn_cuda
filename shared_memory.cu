@@ -8,11 +8,13 @@
 
 #define EPS 1e-6
 
-__global__ void parallel_sum(int *sum, int *arr, int n) {
+
+template<int N, class T>
+__global__ void parallel_sum(T *sum, T *arr) {
     /**
     \brief compute sum of all threads given a block, avoiding data race by allocating a shared memory local_sum. 
     */
-    __shared__ volatile int local_sum[1024];
+    __shared__ volatile T local_sum[1024];
     int j = threadIdx.x, i = blockIdx.x;
     int idx = j + i * blockDim.x;
     local_sum[j] = arr[idx];
@@ -86,7 +88,7 @@ bool test(std::vector<T, CudaAllocator<T>> &ptr, Func func, int n) {
 }
 
 int main() {
-    int n = 65536;
+    const int n = 65536;
     std::vector<int, CudaAllocator<int>> arr(n);
     std::vector<int, CudaAllocator<int>> sum(n / 1024);
     for (int i = 0; i < n; i++) {
@@ -94,7 +96,7 @@ int main() {
     }
     checkCudaErrors(cudaDeviceSynchronize());
     TICK(shared_memory_sum);
-    parallel_sum<<<n / 1024, 1024>>>(sum.data(), arr.data(), n);
+    parallel_sum<n><<<n / 1024, 1024>>>(sum.data(), arr.data());
     TOCK(shared_memory_sum);
     checkCudaErrors(cudaDeviceSynchronize());
     int res = 0;
