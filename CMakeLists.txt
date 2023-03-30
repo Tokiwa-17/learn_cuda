@@ -6,7 +6,7 @@ set(CMAKE_BUILD_TYPE Release)
 project(hellocuda LANGUAGES CXX CUDA)
 
 # add_executable(main sin.cu)
-add_executable(main sin.cu)
+add_executable(main main.cu)
 target_include_directories(main PUBLIC include)
 target_compile_options(main PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
 target_compile_options(main PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)

@@ -1,32 +1,68 @@
 #include <cstdio>
-#include <iostream>
 #include <cuda_runtime.h>
+#include "CudaAllocator.h"
+#include "helper_cuda.h"
+#include <cmath>
+#include <vector>
+// #include <thrust/device_vector.h>  // 如果想用 thrust 也是没问题的
 
-__host__ __device__ void say_hello() {
-#ifdef __CUDA_ARCH__
-    printf("Hello, world from block %d of %d, thread %d of %d, GPU %d!\n", blockIdx.x, gridDim.x, threadIdx.x, blockDim.x, __CUDA_ARCH__);
+#define EPS 1e-6
 
-    // unsigned int tid = threadIdx.x + blockDim.x * blockIdx.x;
-    // unsigned int tnum = blockDim.x * gridDim.x;
-    
-#else
-    printf("Hello, world from CPU!\n");
-#endif
+// 这是基于“边角料法”的，请把他改成基于“网格跨步循环”的：10 分
+template<class T>
+__global__ void fill_sin(T *arr, int n) {
+    for (int i = blockDim.x * blockIdx.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x) {
+        arr[i] = sinf(i);
+    }
 }
 
-__global__ void kernel() {
-    say_hello();
-}
-
-constexpr const char *cuthead(const char *p) {
-    return p + 1;
+__global__ void filter_positive(int *counter, float *res, float const *arr, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    if (arr[i] >= 0) {
+        // 这里有什么问题？请改正：10 分
+        int loc = *counter;
+        atomicAdd(counter, 1);
+        res[loc] = n;
+    }
 }
 
 int main() {
-    //kernel<<<2, 3>>>();
-    kernel<<<dim3(2, 1, 1), dim3(2, 2, 2)>>>();
-    cudaDeviceSynchronize();
-    say_hello();
-    printf(cuthead("Cello, world\n"));
+    constexpr int n = 1<<24;
+    std::vector<float, CudaAllocator<float>> arr(n);
+    std::vector<float, CudaAllocator<float>> res(n);
+    std::vector<int, CudaAllocator<int>> counter(1);
+
+    //FIXME:
+    fill_sin<<<n / 1024, 1024>>>(arr.data(), n);
+
+    //FIXME:
+    filter_positive<<<n / 1024, 1024>>>(counter.data(), res.data(), arr.data(), n);
+
+    //TODO:
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    bool flag = true;
+    for (int i = 0; i < n; i++) {
+        if ((arr[i] - sinf(i)) > EPS) {
+            printf("i: %d\n", i);
+            flag = false;
+            break;
+        }
+    }
+    if (flag) printf("cong.\n");
+    else printf("failed.\n");
+    if (counter[0] <= n / 50) {
+        printf("Result too short! %d <= %d\n", counter[0], n / 50);
+        return -1;
+    }
+    for (int i = 0; i < counter[0]; i++) {
+        if (res[i] < 0) {
+            printf("Wrong At %d: %f < 0\n", i, res[i]);
+            return -1;  
+        }
+    }
+
+    printf("All Correct!\n");  
     return 0;
 }
